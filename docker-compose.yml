@@ -1,0 +1,183 @@
+# Docker Compose configuration for MD-ALL Web Application
+# Production deployment with Nginx reverse proxy and SSL
+
+version: '3.8'
+
+services:
+  # MD-ALL Shiny Application
+  mdall-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mdall-app
+    restart: unless-stopped
+    
+    environment:
+      # Authentication
+      - AUTH_ENABLED=true
+      - AUTH_TYPE=local
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme123}
+      
+      # Logging
+      - LOG_LEVEL=INFO
+      - AUDIT_ENABLED=true
+      
+      # Resource limits
+      - MAX_WORKERS=4
+      - MAX_MEMORY_GB=16
+      - UPLOAD_MAX_SIZE_MB=500
+      
+      # Directories
+      - TEMP_DIR=/data/temp
+      - OUTPUT_DIR=/data/outputs
+      
+      # Session
+      - SESSION_TIMEOUT=3600
+      
+    volumes:
+      # Data persistence
+      - mdall-data:/data
+      - mdall-logs:/logs
+      
+      # Optional: Mount custom configuration
+      # - ./config/custom.yml:/config/custom.yml:ro
+      
+    networks:
+      - mdall-network
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+        reservations:
+          cpus: '2'
+          memory: 8G
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3838/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Don't expose port directly - use nginx
+    # ports:
+    #   - "3838:3838"
+  
+  # Nginx Reverse Proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: mdall-nginx
+    restart: unless-stopped
+    
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - mdall-logs:/logs
+    
+    networks:
+      - mdall-network
+    
+    depends_on:
+      - mdall-app
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  
+  # PostgreSQL Database (Optional - for user management and audit logs)
+  postgres:
+    image: postgres:15-alpine
+    container_name: mdall-postgres
+    restart: unless-stopped
+    
+    environment:
+      - POSTGRES_DB=mdall
+      - POSTGRES_USER=mdall_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-securepassword}
+    
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    
+    networks:
+      - mdall-network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mdall_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  # Optional: Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mdall-prometheus
+    restart: unless-stopped
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    
+    networks:
+      - mdall-network
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    
+    profiles:
+      - monitoring
+  
+  # Optional: Grafana Dashboard
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mdall-grafana
+    restart: unless-stopped
+    
+    ports:
+      - "3000:3000"
+    
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana:/etc/grafana/provisioning:ro
+    
+    networks:
+      - mdall-network
+    
+    depends_on:
+      - prometheus
+    
+    profiles:
+      - monitoring
+
+networks:
+  mdall-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  mdall-data:
+    driver: local
+  mdall-logs:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

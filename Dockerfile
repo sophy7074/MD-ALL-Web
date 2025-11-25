@@ -1,0 +1,140 @@
+# MD-ALL Web Application - Dockerfile
+# Based on Rocker project for R + Shiny applications
+# Production-ready container for clinical genomics
+
+FROM rocker/shiny-verse:4.3.2
+
+LABEL maintainer="MD-ALL Team <zgu@coh.org>"
+LABEL description="MD-ALL: Molecular Diagnosis of B-ALL via RNA-seq"
+LABEL version="1.0.0"
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=America/Los_Angeles \
+    SHINY_LOG_LEVEL=INFO \
+    R_MAX_NUM_DLLS=500
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    libxml2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libgit2-dev \
+    libfontconfig1-dev \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libfreetype6-dev \
+    libtiff5-dev \
+    libhdf5-dev \
+    libgeos-dev \
+    libproj-dev \
+    libgdal-dev \
+    libudunits2-dev \
+    libnode-dev \
+    pandoc \
+    pandoc-citeproc \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    unzip \
+    pigz \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install CRAN R packages
+RUN install2.r --error --skipinstalled --ncpus -1 \
+    devtools \
+    BiocManager \
+    dplyr \
+    tidyr \
+    stringr \
+    ggplot2 \
+    ggrepel \
+    cowplot \
+    plotly \
+    umap \
+    shiny \
+    shinyjs \
+    shinydashboard \
+    shinyWidgets \
+    shinycssloaders \
+    DT \
+    readr \
+    data.table \
+    scales \
+    RColorBrewer \
+    viridis \
+    patchwork \
+    rmarkdown \
+    knitr \
+    markdown \
+    httpuv \
+    promises \
+    future \
+    jsonlite \
+    yaml \
+    config \
+    httr \
+    logger \
+    && rm -rf /tmp/downloaded_packages
+
+# Install Bioconductor packages
+RUN R -e "BiocManager::install(c( \
+    'DESeq2', \
+    'SingleR', \
+    'SummarizedExperiment', \
+    'GenomicRanges', \
+    'IRanges', \
+    'S4Vectors', \
+    'BiocGenerics' \
+    ), ask = FALSE, update = FALSE)"
+
+# Install Seurat and dependencies
+RUN R -e "install.packages('Seurat', repos = 'https://cloud.r-project.org')"
+
+# Install Rphenograph from GitHub
+RUN R -e "devtools::install_github('JinmiaoChenLab/Rphenograph')"
+
+# Install MD-ALL package from GitHub
+# NOTE: Replace with your forked version if needed
+RUN R -e "devtools::install_github('gu-lab20/MD-ALL', upgrade = 'never')"
+
+# Create application directories
+RUN mkdir -p /srv/shiny-server/mdall \
+    /data/uploads \
+    /data/outputs \
+    /data/temp \
+    /logs \
+    /config \
+    && chmod -R 755 /srv/shiny-server \
+    && chmod 1777 /data/temp
+
+# Copy application files
+COPY app/ /srv/shiny-server/mdall/
+COPY config/ /config/
+COPY scripts/ /usr/local/bin/
+
+# Set permissions
+RUN chmod +x /usr/local/bin/*.sh \
+    && chown -R shiny:shiny /srv/shiny-server \
+    && chown -R shiny:shiny /data \
+    && chown -R shiny:shiny /logs
+
+# Configure Shiny Server
+COPY shiny-server.conf /etc/shiny-server/shiny-server.conf
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3838/ || exit 1
+
+# Expose port
+EXPOSE 3838
+
+# Set working directory
+WORKDIR /srv/shiny-server/mdall
+
+# Run initialization and start Shiny Server
+CMD ["/usr/local/bin/start-shiny.sh"]
