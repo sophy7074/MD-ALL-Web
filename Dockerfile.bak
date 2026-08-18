@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev \
     libudunits2-dev \
     libnode-dev \
-    libigraph-dev \
     pandoc \
     pandoc-citeproc \
     build-essential \
@@ -49,7 +48,6 @@ RUN apt-get update && apt-get install -y \
 RUN install2.r --error --skipinstalled --ncpus -1 \
     devtools \
     BiocManager \
-    caret \
     dplyr \
     tidyr \
     stringr \
@@ -63,7 +61,6 @@ RUN install2.r --error --skipinstalled --ncpus -1 \
     shinydashboard \
     shinyWidgets \
     shinycssloaders \
-    shinyFeedback \
     DT \
     readr \
     data.table \
@@ -72,11 +69,8 @@ RUN install2.r --error --skipinstalled --ncpus -1 \
     viridis \
     patchwork \
     rmarkdown \
-    randomForest \
     knitr \
-    LiblineaR \
     markdown \
-    missForest \
     httpuv \
     promises \
     future \
@@ -85,82 +79,37 @@ RUN install2.r --error --skipinstalled --ncpus -1 \
     config \
     httr \
     logger \
-    leiden \
-    sp \
-    fitdistrplus \
-    ggridges \
-    ica \
-    lmtest \
-    pbapply \
-    RANN \
-    RcppAnnoy \
-    ROCR \
-    Rtsne \
-    scattermore \
-    sctransform \
-    spatstat.geom \
-    spatstat.explore \
-    uwot \
-    RcppProgress \
     && rm -rf /tmp/downloaded_packages
-
-
-RUN R -e "BiocManager::install(c( \
-    'RCurl', \
-    'IRanges', \
-    'S4Vectors', \
-    'BiocGenerics' \
-    ), ask = FALSE, update = FALSE)"
-
-
-COPY Rpackages/GenomeInfoDbData_1.2.11.tar.gz /tmp/GenomeInfoDbData_1.2.11.tar.gz
-COPY Rpackages/GenomeInfoDb_1.38.8.tar.gz /tmp/GenomeInfoDb_1.38.8.tar.gz
-
-# 按顺序离线安装
-RUN R -e "pkgs <- c( \
-    '/tmp/GenomeInfoDb_1.38.8.tar.gz', \
-    '/tmp/GenomeInfoDbData_1.2.11.tar.gz'\
-    ); \
-    for(p in pkgs){ \
-    install.packages(p, repos=NULL, type='source'); \
-    }"
-
 
 # Install Bioconductor packages
 RUN R -e "BiocManager::install(c( \
     'DESeq2', \
     'SingleR', \
     'SummarizedExperiment', \
-    'GenomicRanges' \
+    'GenomicRanges', \
+    'IRanges', \
+    'S4Vectors', \
+    'BiocGenerics' \
     ), ask = FALSE, update = FALSE)"
 
 # Install Seurat and dependencies
-#RUN R -e "install.packages('Seurat', repos = 'https://cloud.r-project.org')"
-
-RUN R -e "packageurl <- 'https://cran.r-project.org/src/contrib/Archive/SeuratObject/SeuratObject_4.1.4.tar.gz'; install.packages(packageurl, repos=NULL, type='source')"
-#RUN R -e 'packageurl <- "https://cloud.r-project.org/src/contrib/00Archive/Seurat/Seurat_4.4.0.tar.gz"; install.packages(packageurl, repos=NULL, type="source")'
-COPY Rpackages/Seurat_4.4.0.tar.gz /tmp/Seurat_4.4.0.tar.gz
-RUN R -e "install.packages('/tmp/Seurat_4.4.0.tar.gz', repos=NULL, type='source')"
-
+RUN R -e "install.packages('Seurat', repos = 'https://cloud.r-project.org')"
 
 # Install Rphenograph from GitHub
 RUN R -e "devtools::install_github('JinmiaoChenLab/Rphenograph')"
 
 # Install MD-ALL package from GitHub
 # NOTE: Replace with your forked version if needed
-#RUN R -e "devtools::install_github('gu-lab20/MD-ALL', upgrade = 'never')"
+RUN R -e "devtools::install_github('gu-lab20/MD-ALL', upgrade = 'never')"
 
-# Copy pre-downloaded MD-ALL source zip into container
-COPY Rpackages/gu-lab20-MD-ALL-3047c05.tar.gz /tmp/gu-lab20-MD-ALL-3047c05.tar.gz
-
-# Unzip source code & install locally, no GitHub network required
-RUN cd /tmp \
-    && tar -xzvf gu-lab20-MD-ALL-3047c05.tar.gz \
-    && R -e "devtools::install_local('/tmp/gu-lab20-MD-ALL-3047c05', upgrade = 'never')" \
-    && rm -rf /tmp/gu-lab20-MD-ALL-3047c05.tar.gz /tmp/gu-lab20-MD-ALL-3047c05
-
-# 清理临时包减小镜像
-RUN rm -rf /tmp/*
+## Copy pre-downloaded MD-ALL source zip into container
+#COPY MD-ALL-main.zip /tmp/MD-ALL-main.zip
+#
+## Unzip source code & install locally, no GitHub network required
+#RUN cd /tmp \
+#    && unzip MD-ALL-main.zip \
+#    && R -e "devtools::install_local('/tmp/MD-ALL-main', upgrade = 'never')" \
+#    && rm -rf /tmp/MD-ALL-main.zip /tmp/MD-ALL-main
 
 # Create application directories
 RUN mkdir -p /srv/shiny-server/mdall \
@@ -197,5 +146,4 @@ EXPOSE 3838
 WORKDIR /srv/shiny-server/mdall
 
 # Run initialization and start Shiny Server
-#CMD ["/usr/local/bin/start-shiny.sh"]
-#CMD []
+CMD ["/usr/local/bin/start-shiny.sh"]

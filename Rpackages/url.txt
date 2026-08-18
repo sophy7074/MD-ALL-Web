@@ -1,0 +1,4 @@
+https://mghp.osn.xsede.org/bir190004-bucket01/archive.bioconductor.org/packages/3.18/data/annotation/src/contrib/GenomeInfoDbData_1.2.11.tar.gz
+https://mghp.osn.xsede.org/bir190004-bucket01/archive.bioconductor.org/packages/3.18/bioc/src/contrib/GenomeInfoDb_1.38.8.tar.gz
+https://cran.r-project.org/src/contrib/Archive/SeuratObject/SeuratObject_4.1.4.tar.gz
+https://cran.r-project.org/src/contrib/Archive/Seurat/Seurat_4.4.0.tar.gz
